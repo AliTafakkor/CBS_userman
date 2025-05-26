@@ -1,5 +1,5 @@
 from django.db import models
-from accounts.models import PrincipalInvestigator, SponsoredUser
+from accounts.models import ProjectGroup, UserProfile
 import uuid
 from django.utils import timezone
 
@@ -25,8 +25,8 @@ class BillingCycle(models.Model):
 class BillingRecord(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     cycle = models.ForeignKey(BillingCycle, on_delete=models.CASCADE, related_name='billing_records')
-    pi = models.ForeignKey(PrincipalInvestigator, on_delete=models.CASCADE, related_name='billing_records')
-    sponsored_user = models.ForeignKey(SponsoredUser, on_delete=models.CASCADE, related_name='billing_records')
+    project_group = models.ForeignKey(ProjectGroup, on_delete=models.CASCADE, related_name='billing_records')
+    user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='billing_records')
     rate_used = models.ForeignKey(BillingRate, on_delete=models.PROTECT)
     prorated_days = models.IntegerField(default=0)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -34,4 +34,4 @@ class BillingRecord(models.Model):
     notes = models.TextField(blank=True)
     
     def __str__(self):
-        return f"Billing for {self.sponsored_user} - {self.cycle.name}"
+        return f"Billing for {self.user} - {self.cycle.name} - {self.project_group.name}"

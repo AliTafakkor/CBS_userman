@@ -3,45 +3,49 @@ from django.contrib.auth.models import User
 import uuid
 from django.utils import timezone
 
-class PrincipalInvestigator(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    speedcode = models.CharField(max_length=50, unique=True)
-    start_date = models.DateField()
-    end_date = models.DateField(null=True, blank=True)
-    
-    def __str__(self):
-        return f"{self.user.get_full_name()} (Speedcode: {self.speedcode})"
-
-class SponsoredUser(models.Model):
-    STATUS_CHOICES = [
-        ('active', 'Active'),
-        ('pending', 'Pending Approval'),
-        ('inactive', 'Inactive'),
-    ]
-    
-    USER_ROLE_CHOICES = [
-        ('student', 'Student'),
-        ('staff', 'Staff'),
-        ('faculty', 'Faculty'),
-        ('external', 'External Collaborator'),
-    ]
-
+class UserProfile(models.Model):
     USER_TYPE_CHOICES = [
-        ('cpu heavy', 'CPU Heavy', 'CPU', 'Heavy', 'heavy'),
-        ('gpu heavy', 'GPU Heavy', 'GPU'),
+        ('heavy', 'Heavy'),
         ('basic', 'Basic'),
     ]
-    
+    STATUS_CHOICES = [
+        ('pending', 'Pending PI Confirmation'),
+        ('active', 'Active'),
+        ('inactive', 'Inactive'),
+    ]
     user = models.OneToOneField(User, on_delete=models.CASCADE)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    uwo_email = models.EmailField(unique=True)
+    is_pi = models.BooleanField(default=False)
+    is_sponsored = models.BooleanField(default=False)
+    user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES, default='basic')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES)
-    user_role = models.CharField(max_length=100, choices=USER_ROLE_CHOICES)
-    sponsor = models.ForeignKey(PrincipalInvestigator, on_delete=models.CASCADE, related_name='sponsored_users')
-    start_date = models.DateField()
-    end_date = models.DateField(null=True, blank=True)
-    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     def __str__(self):
-        return f"{self.user.get_full_name()} (Sponsored by: {self.sponsor.user.last_name})"
+        return f"{self.first_name} {self.last_name} ({'PI' if self.is_pi else 'Sponsored'})"
+
+class ProjectGroup(models.Model):
+    name = models.CharField(max_length=100)
+    pis = models.ManyToManyField(UserProfile, related_name='project_groups')
+    speedcodes = models.CharField(max_length=200, help_text='Comma-separated speedcodes')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+class StorageAllocation(models.Model):
+    project = models.ForeignKey(ProjectGroup, on_delete=models.CASCADE, related_name='storage_allocations')
+    storage_amount = models.PositiveIntegerField(help_text='Storage in GB')
+    users_with_access = models.ManyToManyField(UserProfile, related_name='storage_access')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.project.name}: {self.storage_amount} GB"
 
 # Version control for user changes
 class UserChangeRecord(models.Model):
