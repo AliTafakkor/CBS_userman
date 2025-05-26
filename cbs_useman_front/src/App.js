@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import PIDashboard from './pages/PIDashboard';
 import UserDashboard from './pages/UserDashboard';
+import NewPIRequestPage from './pages/NewPIRequestPage';
 
 function DashboardRouter() {
   const { user } = useAuth();
@@ -20,6 +21,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/request/new-pi" element={<NewPIRequestPage />} />
           <Route path="/*" element={<DashboardRouter />} />
         </Routes>
       </Router>
