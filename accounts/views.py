@@ -4,6 +4,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
+from rest_framework import generics, permissions
+from .models import Request
+from .serializers import RequestSerializer
 
 class TestLoginView(APIView):
     """
@@ -69,3 +72,17 @@ class TestCreateUserView(APIView):
             "user_id": user.id,
             "username": user.username
         }, status=status.HTTP_201_CREATED)
+
+class RequestListCreateView(generics.ListCreateAPIView):
+    serializer_class = RequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        # Admins see all, users see their own
+        user = self.request.user
+        if user.is_staff:
+            return Request.objects.all()
+        return Request.objects.filter(user=user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

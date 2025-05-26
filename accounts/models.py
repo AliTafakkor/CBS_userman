@@ -67,3 +67,27 @@ class UserChangeRecord(models.Model):
     
     class Meta:
         ordering = ['-timestamp']
+
+class Request(models.Model):
+    REQUEST_TYPE_CHOICES = [
+        ('new_pi', 'New PI Account'),
+        ('new_user', 'New User Account'),
+        ('user_update', 'User Account Update'),
+        ('pi_update', 'PI Account Update'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('denied', 'Denied'),
+    ]
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='requests')
+    request_type = models.CharField(max_length=20, choices=REQUEST_TYPE_CHOICES)
+    data = models.JSONField()
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    admin_notes = models.TextField(blank=True)
+    approved_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='approved_requests')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.request_type} ({self.status})"
