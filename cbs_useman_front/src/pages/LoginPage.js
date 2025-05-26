@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const LoginPage = () => {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [role, setRole] = useState('user');
+  const navigate = useNavigate();
 
   const handleSubmit = (e) => {
     e.preventDefault();
     login(username, role);
+    navigate('/'); // Redirect to dashboard
   };
 
   return (
