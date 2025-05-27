@@ -18,4 +18,24 @@ export async function getUserStatus() {
     },
   });
   return res.data;
+}
+
+export async function getUserEmail() {
+  const token = localStorage.getItem('token');
+  const res = await axios.get('/api/accounts/me/email/', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return res.data.email;
+}
+
+export async function getAllProjects() {
+  const token = localStorage.getItem('token');
+  const res = await axios.get('/api/accounts/projects/', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return res.data;
 } 
