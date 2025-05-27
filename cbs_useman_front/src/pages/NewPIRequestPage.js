@@ -3,6 +3,7 @@ import { TextField, Button, Typography, Box, IconButton, Grid, Paper, RadioGroup
 import { AddCircle, RemoveCircle } from '@mui/icons-material';
 import { submitRequest, getUserEmail, getAllProjects } from '../api/requests';
 import { useAuth } from '../context/AuthContext';
+import WesternLayout from '../components/WesternLayout';
 
 const initialPIState = {
   uwo_email: '',
@@ -117,7 +118,7 @@ export default function NewPIRequestPage() {
   };
 
   return (
-    <Box maxWidth={700} mx="auto" mt={4}>
+    <WesternLayout boxWidth={700}>
       <Typography variant="h4" gutterBottom>New PI Account Request</Typography>
       {success && <Typography color="success.main">Request submitted!</Typography>}
       {error && <Typography color="error.main">{error}</Typography>}
@@ -182,6 +183,6 @@ export default function NewPIRequestPage() {
           <Button type="submit" variant="contained" color="primary" disabled={submitting}>Submit</Button>
         </Box>
       </form>
-    </Box>
+    </WesternLayout>
   );
 } 
