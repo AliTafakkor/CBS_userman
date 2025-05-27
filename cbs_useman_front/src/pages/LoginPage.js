@@ -7,7 +7,6 @@ const LoginPage = () => {
   const { login, setUserStatus } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('user');
   const navigate = useNavigate();
   const [error, setError] = useState('');
 
@@ -56,14 +55,6 @@ const LoginPage = () => {
             required
             style={{ width: '100%', marginBottom: 12 }}
           />
-        </div>
-        <div>
-          <label>Role:</label>
-          <select value={role} onChange={e => setRole(e.target.value)} style={{ width: '100%', marginBottom: 12 }}>
-            <option value="admin">Admin</option>
-            <option value="pi">PI</option>
-            <option value="user">User</option>
-          </select>
         </div>
         <button type="submit" style={{ width: '100%' }}>Login</button>
       </form>
