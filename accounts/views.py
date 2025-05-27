@@ -5,8 +5,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework import generics, permissions
-from .models import Request
+from .models import Request, UserProfile
 from .serializers import RequestSerializer
+from rest_framework.decorators import api_view, permission_classes
 
 class TestLoginView(APIView):
     """
@@ -86,3 +87,19 @@ class RequestListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def user_status(request):
+    user = request.user
+    if user.is_staff:
+        return Response({'status': 'active', 'role': 'admin'})
+    try:
+        profile = UserProfile.objects.get(user=user)
+        if profile.status == 'active':
+            role = 'pi' if profile.is_pi else 'user'
+            return Response({'status': 'active', 'role': role})
+        else:
+            return Response({'status': 'inactive', 'role': None})
+    except UserProfile.DoesNotExist:
+        return Response({'status': 'not_found', 'role': None})
