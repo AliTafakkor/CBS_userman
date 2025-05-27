@@ -38,4 +38,14 @@ export async function getAllProjects() {
     },
   });
   return res.data;
+}
+
+export async function getMyRequests() {
+  const token = localStorage.getItem('token');
+  const res = await axios.get('/api/accounts/requests/', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return res.data;
 } 
