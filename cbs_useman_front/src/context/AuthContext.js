@@ -9,11 +9,19 @@ export const AuthProvider = ({ children }) => {
     return stored ? JSON.parse(stored) : null;
   });
 
-  const login = (username, role) => {
+  const login = (username, role, status = 'active') => {
     // For test auth, just set user and role
-    const userData = { username, role };
+    const userData = { username, role, status };
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
+  };
+
+  const setUserStatus = (status, role) => {
+    setUser(prev => {
+      const updated = { ...prev, status, role };
+      localStorage.setItem('user', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const logout = () => {
@@ -22,7 +30,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, setUserStatus }}>
       {children}
     </AuthContext.Provider>
   );
