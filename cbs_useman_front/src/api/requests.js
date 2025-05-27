@@ -48,4 +48,14 @@ export async function getMyRequests() {
     },
   });
   return res.data;
+}
+
+export async function getAllPIs() {
+  const token = localStorage.getItem('token');
+  const res = await axios.get('/api/accounts/pis/', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return res.data;
 } 
