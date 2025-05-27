@@ -5,6 +5,12 @@ import { submitRequest, getUserEmail, getAllProjects } from '../api/requests';
 import { useAuth } from '../context/AuthContext';
 import WesternLayout from '../components/WesternLayout';
 
+function getDefaultContractEnd() {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() + 10);
+  return d.toISOString().slice(0, 10);
+}
+
 const initialPIState = {
   uwo_email: '',
   first_name: '',
@@ -13,6 +19,7 @@ const initialPIState = {
   phone: '',
   user_type: 'basic',
   existing_project_ids: [],
+  contract_end: getDefaultContractEnd(),
 };
 
 const initialProject = {
@@ -130,6 +137,17 @@ export default function NewPIRequestPage() {
         <TextField label="Last Name" name="last_name" value={form.last_name} onChange={handleChange} fullWidth margin="normal" required />
         <TextField label="Department/Institution" name="department" value={form.department} onChange={handleChange} fullWidth margin="normal" required />
         <TextField label="Phone" name="phone" value={form.phone} onChange={handleChange} fullWidth margin="normal" />
+        <TextField
+          label="Contract End Date"
+          name="contract_end"
+          type="date"
+          value={form.contract_end}
+          onChange={handleChange}
+          fullWidth
+          margin="normal"
+          InputLabelProps={{ shrink: true }}
+          required
+        />
         <FormControl component="fieldset" margin="normal" sx={{ mt: 2 }}>
           <FormLabel component="legend">Account Type</FormLabel>
           <RadioGroup row name="user_type" value={form.user_type} onChange={handleChange}>
