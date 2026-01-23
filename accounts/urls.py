@@ -1,7 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    DepartmentViewSet, PrincipalInvestigatorViewSet, 
+    DepartmentViewSet,
+    PrincipalInvestigatorViewSet, 
     SponsoredUserViewSet, UserChangeRecordViewSet,
     TestLoginView, TestCreateUserView  # New views for testing
 )

@@ -4,6 +4,92 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
+from rest_framework import viewsets, permissions, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from .models import Department, PrincipalInvestigator, SponsoredUser, UserChangeRecord
+from .serializers import (
+    UserSerializer, DepartmentSerializer, PrincipalInvestigatorSerializer,
+    SponsoredUserSerializer, UserChangeRecordSerializer
+)
+import json
+from django.utils import timezone
+
+class DepartmentViewSet(viewsets.ModelViewSet):
+    queryset = Department.objects.all()
+    serializer_class = DepartmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'code']
+    ordering_fields = ['name', 'code']
+
+class PrincipalInvestigatorViewSet(viewsets.ModelViewSet):
+    queryset = PrincipalInvestigator.objects.all()
+    serializer_class = PrincipalInvestigatorSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['user__first_name', 'user__last_name', 'employee_id']
+    ordering_fields = ['user__last_name', 'department__name']
+    
+    @action(detail=True, methods=['get'])
+    def sponsored_users(self, request, pk=None):
+        pi = self.get_object()
+        users = SponsoredUser.objects.filter(sponsor=pi)
+        serializer = SponsoredUserSerializer(users, many=True)
+        return Response(serializer.data)
+
+class SponsoredUserViewSet(viewsets.ModelViewSet):
+    queryset = SponsoredUser.objects.all()
+    serializer_class = SponsoredUserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['user__first_name', 'user__last_name', 'user_type', 'status']
+    ordering_fields = ['user__last_name', 'sponsor__user__last_name', 'start_date']
+    
+    def perform_create(self, serializer):
+        # Save initial state and create change record
+        instance = serializer.save()
+        UserChangeRecord.objects.create(
+            user=instance.user,
+            change_type='create',
+            changed_by=self.request.user,
+            previous_data=None,
+            new_data=json.loads(SponsoredUserSerializer(instance).data),
+            notes=f"Account created by {self.request.user.get_full_name()}"
+        )
+    
+    def perform_update(self, serializer):
+        # Get the existing object for comparison
+        instance = self.get_object()
+        previous_data = json.loads(SponsoredUserSerializer(instance).data)
+        
+        # Save the updates
+        updated_instance = serializer.save()
+        
+        # Create change record
+        UserChangeRecord.objects.create(
+            user=updated_instance.user,
+            change_type='update',
+            changed_by=self.request.user,
+            previous_data=previous_data,
+            new_data=json.loads(SponsoredUserSerializer(updated_instance).data),
+            notes=f"Account updated by {self.request.user.get_full_name()}"
+        )
+
+class UserChangeRecordViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = UserChangeRecord.objects.all()
+    serializer_class = UserChangeRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['user__username', 'change_type', 'notes']
+    ordering_fields = ['timestamp', 'change_type']
+    
+    def get_queryset(self):
+        queryset = UserChangeRecord.objects.all()
+        user_id = self.request.query_params.get('user_id', None)
+        if user_id is not None:
+            queryset = queryset.filter(user_id=user_id)
+        return queryset
 
 class TestLoginView(APIView):
     """
