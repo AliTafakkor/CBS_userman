@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 import uuid
 from django.utils import timezone
 
@@ -27,17 +28,37 @@ class Project(models.Model):
         return f"{self.name} (Owner: {self.owner.user.last_name})"
 
 class ProjectSpeedcode(models.Model):
-    """Speedcodes assigned to a project for cost splitting"""
+    """Speedcodes assigned to a project for cost splitting
+    
+    Each speedcode is tied to a specific PI who owns it.
+    Only the owning PI can authorize the usage of their speedcode in a project.
+    """
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='speedcodes')
-    pi = models.ForeignKey('PrincipalInvestigator', on_delete=models.CASCADE)
-    speedcode = models.CharField(max_length=50)
+    pi = models.ForeignKey('PrincipalInvestigator', on_delete=models.CASCADE, related_name='authorized_speedcodes', help_text="PI who owns and authorizes this speedcode")
+    speedcode = models.CharField(max_length=50, help_text="Speedcode owned by the PI")
     allocation_percentage = models.DecimalField(max_digits=5, decimal_places=2, help_text="Percentage of project costs to charge to this speedcode")
+    authorized_date = models.DateField(auto_now_add=True, help_text="Date when PI authorized this speedcode for the project")
     
     class Meta:
         unique_together = ['project', 'speedcode']
     
+    def clean(self):
+        """Validate that the speedcode belongs to the authorizing PI"""
+        super().clean()
+        if self.pi and self.speedcode and self.speedcode != self.pi.speedcode:
+            raise ValidationError({
+                'speedcode': f'Speedcode "{self.speedcode}" does not belong to PI {self.pi.user.get_full_name()}. '
+                           f'Only the speedcode owner can authorize its usage. '
+                           f'PI {self.pi.user.get_full_name()} owns speedcode: {self.pi.speedcode}'
+            })
+    
+    def save(self, *args, **kwargs):
+        """Ensure validation runs on save"""
+        self.clean()
+        super().save(*args, **kwargs)
+    
     def __str__(self):
-        return f"{self.project.name} - {self.speedcode} ({self.allocation_percentage}%)"
+        return f"{self.project.name} - {self.speedcode} ({self.allocation_percentage}%) [Authorized by: {self.pi.user.get_full_name()}]"
 
 class PrincipalInvestigator(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)

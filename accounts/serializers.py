@@ -23,10 +23,24 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 class ProjectSpeedcodeSerializer(serializers.ModelSerializer):
     pi_name = serializers.CharField(source='pi.user.get_full_name', read_only=True)
+    pi_speedcode = serializers.CharField(source='pi.speedcode', read_only=True)
     
     class Meta:
         model = ProjectSpeedcode
         fields = '__all__'
+        read_only_fields = ['authorized_date']
+    
+    def validate(self, data):
+        """
+        Validate that the speedcode belongs to the authorizing PI.
+        Only the PI who owns a speedcode can authorize its usage in a project.
+        """
+        pi = data.get('pi')
+        speedcode = data.get('speedcode')
+        
+        if pi and speedcode and speedcode != pi.speedcode:
+            raise serializers.ValidationError({
+                'speedcode': f'Speedcode "{speedcode}" does not belong to PI {pi.user.get_full_name()}. '\n                           f'Only the speedcode owner can authorize its usage. '\n                           f'This PI owns speedcode: {pi.speedcode}'\n            })\n        \n        return data
 
 class PrincipalInvestigatorSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
