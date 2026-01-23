@@ -47,9 +47,9 @@ export const UserService = {
 };
 
 export const AuthService = {
-  login: (credentials) => apiClient.post('/auth/login/', credentials),
-  logout: () => apiClient.post('/auth/logout/'),
-  getCurrentUser: () => apiClient.get('/auth/me/'),
+  login: (credentials) => apiClient.post('/accounts/test-login/', credentials),
+  logout: () => apiClient.post('/accounts/test-logout/', ),
+  getCurrentUser: () => apiClient.get('/accounts/current-user/'),
 };
 
 export default apiClient;

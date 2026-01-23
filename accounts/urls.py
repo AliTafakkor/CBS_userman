@@ -6,7 +6,7 @@ from .views import (
     ProjectSpeedcodeViewSet,
     PrincipalInvestigatorViewSet, 
     SponsoredUserViewSet, UserChangeRecordViewSet,
-    TestLoginView, TestCreateUserView  # New views for testing
+    TestLoginView, TestCreateUserView, TestLogoutView, CurrentUserView  # New views for testing
 )
 
 router = DefaultRouter()
@@ -22,4 +22,7 @@ urlpatterns = [
     # Testing endpoints - remove in production
     path('test-login/', TestLoginView.as_view(), name='test-login'),
     path('test-create-user/', TestCreateUserView.as_view(), name='test-create-user'),
+    # Aliases for frontend compatibility
+    path('test-logout/', TestLogoutView.as_view(), name='test-logout'),
+    path('current-user/', CurrentUserView.as_view(), name='current-user'),
 ]

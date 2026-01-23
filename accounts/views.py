@@ -7,6 +7,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.authtoken.models import Token
 from .models import Department, PrincipalInvestigator, SponsoredUser, UserChangeRecord, Project, ProjectSpeedcode
 from .serializers import (
     UserSerializer, DepartmentSerializer, PrincipalInvestigatorSerializer,
@@ -156,6 +157,7 @@ class UserChangeRecordViewSet(viewsets.ReadOnlyModelViewSet):
 class TestLoginView(APIView):
     """
     Temporary login endpoint for testing - will be replaced by SSO in production
+    Returns token and user info for frontend consumption
     """
     permission_classes = [AllowAny]
     
@@ -166,12 +168,20 @@ class TestLoginView(APIView):
         user = authenticate(username=username, password=password)
         
         if user is not None:
-            login(request, user)
+            # Generate or get existing token
+            token, _ = Token.objects.get_or_create(user=user)
+            
             return Response({
-                "message": "Login successful",
-                "user_id": user.id,
-                "username": user.username,
-                "is_staff": user.is_staff
+                "token": token.key,
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "is_staff": user.is_staff,
+                    "is_superuser": user.is_superuser,
+                }
             })
         else:
             return Response(
@@ -217,3 +227,51 @@ class TestCreateUserView(APIView):
             "user_id": user.id,
             "username": user.username
         }, status=status.HTTP_201_CREATED)
+
+
+class TestLogoutView(APIView):
+    """
+    Logout endpoint for testing
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        # Invalidate the token
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth_header.startswith('Bearer '):
+            token_key = auth_header[7:]
+            try:
+                token = Token.objects.get(key=token_key)
+                token.delete()
+            except Token.DoesNotExist:
+                pass
+        
+        return Response({"message": "Logout successful"})
+
+
+class CurrentUserView(APIView):
+    """
+    Get current user info based on token
+    """
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth_header.startswith('Bearer '):
+            token_key = auth_header[7:]
+            try:
+                token = Token.objects.get(key=token_key)
+                user = token.user
+                return Response({
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "is_staff": user.is_staff,
+                    "is_superuser": user.is_superuser,
+                })
+            except:
+                pass
+        
+        return Response({"error": "Not authenticated"}, status=status.HTTP_401_UNAUTHORIZED)
