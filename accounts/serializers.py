@@ -40,7 +40,14 @@ class ProjectSpeedcodeSerializer(serializers.ModelSerializer):
         
         if pi and speedcode and speedcode != pi.speedcode:
             raise serializers.ValidationError({
-                'speedcode': f'Speedcode "{speedcode}" does not belong to PI {pi.user.get_full_name()}. '\n                           f'Only the speedcode owner can authorize its usage. '\n                           f'This PI owns speedcode: {pi.speedcode}'\n            })\n        \n        return data
+                'speedcode': (
+                    f'Speedcode "{speedcode}" does not belong to PI {pi.user.get_full_name()}. '
+                    f'Only the speedcode owner can authorize its usage. '
+                    f'This PI owns speedcode: {pi.speedcode}'
+                )
+            })
+        
+        return data
 
 class PrincipalInvestigatorSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)

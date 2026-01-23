@@ -40,12 +40,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 class ProjectSpeedcodeViewSet(viewsets.ModelViewSet):
-    \"\"\"
+    """
     ViewSet for managing speedcode authorizations on projects.
     
     Each speedcode is owned by a specific PI. Only the owning PI can
     authorize their speedcode to be used in a project for cost allocation.
-    \"\"\"
+    """
     queryset = ProjectSpeedcode.objects.all()
     serializer_class = ProjectSpeedcodeSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -54,10 +54,10 @@ class ProjectSpeedcodeViewSet(viewsets.ModelViewSet):
     ordering_fields = ['authorized_date', 'allocation_percentage']
     
     def perform_create(self, serializer):
-        \"\"\"
+        """
         Create a speedcode authorization.
         Validation ensures the speedcode belongs to the authorizing PI.
-        \"\"\"
+        """
         serializer.save()
 
 class PrincipalInvestigatorViewSet(viewsets.ModelViewSet):
