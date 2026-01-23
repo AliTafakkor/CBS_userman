@@ -2,6 +2,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     DepartmentViewSet,
+    ProjectViewSet,
+    ProjectSpeedcodeViewSet,
     PrincipalInvestigatorViewSet, 
     SponsoredUserViewSet, UserChangeRecordViewSet,
     TestLoginView, TestCreateUserView  # New views for testing
@@ -9,6 +11,8 @@ from .views import (
 
 router = DefaultRouter()
 router.register(r'departments', DepartmentViewSet)
+router.register(r'projects', ProjectViewSet)
+router.register(r'project-speedcodes', ProjectSpeedcodeViewSet)
 router.register(r'principal-investigators', PrincipalInvestigatorViewSet)
 router.register(r'sponsored-users', SponsoredUserViewSet)
 router.register(r'change-records', UserChangeRecordViewSet)

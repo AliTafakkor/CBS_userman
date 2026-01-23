@@ -7,13 +7,14 @@ from rest_framework.permissions import AllowAny
 from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Department, PrincipalInvestigator, SponsoredUser, UserChangeRecord
+from .models import Department, PrincipalInvestigator, SponsoredUser, UserChangeRecord, Project, ProjectSpeedcode
 from .serializers import (
     UserSerializer, DepartmentSerializer, PrincipalInvestigatorSerializer,
-    SponsoredUserSerializer, UserChangeRecordSerializer
+    SponsoredUserSerializer, UserChangeRecordSerializer, ProjectSerializer, ProjectSpeedcodeSerializer
 )
 import json
 from django.utils import timezone
+from django.db import transaction
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
@@ -23,6 +24,26 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'code']
     ordering_fields = ['name', 'code']
 
+class ProjectViewSet(viewsets.ModelViewSet):
+    queryset = Project.objects.all()
+    serializer_class = ProjectSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'owner__user__first_name', 'owner__user__last_name']
+    ordering_fields = ['name', 'created_date']
+    
+    @action(detail=True, methods=['get'])
+    def speedcodes(self, request, pk=None):
+        project = self.get_object()
+        speedcodes = ProjectSpeedcode.objects.filter(project=project)
+        serializer = ProjectSpeedcodeSerializer(speedcodes, many=True)
+        return Response(serializer.data)
+
+class ProjectSpeedcodeViewSet(viewsets.ModelViewSet):
+    queryset = ProjectSpeedcode.objects.all()
+    serializer_class = ProjectSpeedcodeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
 class PrincipalInvestigatorViewSet(viewsets.ModelViewSet):
     queryset = PrincipalInvestigator.objects.all()
     serializer_class = PrincipalInvestigatorSerializer
@@ -30,6 +51,31 @@ class PrincipalInvestigatorViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['user__first_name', 'user__last_name', 'employee_id']
     ordering_fields = ['user__last_name', 'department__name']
+    
+    @transaction.atomic
+    def perform_create(self, serializer):
+        # Create the PI
+        pi = serializer.save()
+        
+        # Create default project for the PI
+        default_project = Project.objects.create(
+            name=f"{pi.user.get_full_name()}'s Default Project",
+            description=f"Default project for {pi.user.get_full_name()}",
+            owner=pi,
+            is_default=True
+        )
+        
+        # Create initial speedcode allocation (100% to PI's speedcode)
+        ProjectSpeedcode.objects.create(
+            project=default_project,
+            pi=pi,
+            speedcode=pi.speedcode,
+            allocation_percentage=100.00
+        )
+        
+        # Set as default project
+        pi.default_project = default_project
+        pi.save()
     
     @action(detail=True, methods=['get'])
     def sponsored_users(self, request, pk=None):
