@@ -7,11 +7,11 @@ from .views import (
     PrincipalInvestigatorViewSet,
     SponsoredUserViewSet,
     UserChangeRecordViewSet,
+    RequestViewSet,
     TestLoginView,
     TestCreateUserView,
     TestLogoutView,
     CurrentUserView,
-    RequestListCreateView,
     user_status,
     user_email,
     list_projects,
@@ -24,6 +24,7 @@ router.register(r'project-speedcodes', ProjectSpeedcodeViewSet)
 router.register(r'principal-investigators', PrincipalInvestigatorViewSet)
 router.register(r'sponsored-users', SponsoredUserViewSet)
 router.register(r'change-records', UserChangeRecordViewSet)
+router.register(r'requests', RequestViewSet, basename='request')
 
 urlpatterns = [
     path('', include(router.urls)),
@@ -31,7 +32,6 @@ urlpatterns = [
     path('test-logout/', TestLogoutView.as_view(), name='test-logout'),
     path('test-create-user/', TestCreateUserView.as_view(), name='test-create-user'),
     path('current-user/', CurrentUserView.as_view(), name='current-user'),
-    path('requests/', RequestListCreateView.as_view(), name='request-list-create'),
     path('user-status/', user_status, name='user-status'),
     path('me/email/', user_email, name='user-email'),
     path('all-projects/', list_projects, name='list-projects'),

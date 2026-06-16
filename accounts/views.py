@@ -219,18 +219,40 @@ class CurrentUserView(APIView):
         return Response({"error": "Not authenticated"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
-class RequestListCreateView(generics.ListCreateAPIView):
+class RequestViewSet(viewsets.ModelViewSet):
     serializer_class = RequestSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
         if user.is_staff:
-            return Request.objects.all()
+            qs = Request.objects.all()
+            status_filter = self.request.query_params.get('status')
+            if status_filter:
+                qs = qs.filter(status=status_filter)
+            return qs
         return Request.objects.filter(user=user)
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
+    def approve(self, request, pk=None):
+        req = self.get_object()
+        req.status = 'approved'
+        req.admin_notes = request.data.get('admin_notes', '')
+        req.approved_by = request.user
+        req.save()
+        return Response(RequestSerializer(req).data)
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
+    def deny(self, request, pk=None):
+        req = self.get_object()
+        req.status = 'denied'
+        req.admin_notes = request.data.get('admin_notes', '')
+        req.approved_by = request.user
+        req.save()
+        return Response(RequestSerializer(req).data)
 
 
 @api_view(['GET'])

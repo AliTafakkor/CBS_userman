@@ -1,105 +1,245 @@
-import React from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Box, Typography, Button, Paper, Grid, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
+import {
+  Box, Typography, Button, Paper, Grid, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, Chip, CircularProgress, Tabs, Tab,
+} from '@mui/material';
 import WesternLayout from '../components/WesternLayout';
+import { getAllProjects, getMySponsoredUsers, getStorageAllocations, getMyRequests } from '../api/requests';
+
+const STATUS_COLOR = { active: 'success', pending: 'warning', inactive: 'default' };
 
 const PIDashboard = () => {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const [tab, setTab] = useState(0);
+  const [piProfile, setPiProfile] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [sponsoredUsers, setSponsoredUsers] = useState([]);
+  const [storageAllocations, setStorageAllocations] = useState([]);
+  const [myRequests, setMyRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Placeholder data
-  const projects = [];
-  const storageAllocations = [];
-  const sponsoredUsers = [];
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      // Fetch PI's profile (the PI whose user matches current user)
+      const piRes = await fetch('/api/accounts/principal-investigators/', {
+        headers: { Authorization: `Token ${localStorage.getItem('token')}` },
+      });
+      const piData = await piRes.json();
+      const piList = Array.isArray(piData) ? piData : piData.results || [];
+      const currentPI = piList.find(pi => pi.user?.id === user?.id || pi.user?.username === user?.username);
+      setPiProfile(currentPI || null);
+
+      const [projData, reqData] = await Promise.all([
+        getAllProjects(),
+        getMyRequests(),
+      ]);
+
+      const projList = Array.isArray(projData) ? projData : projData.results || [];
+      // Filter projects owned by this PI
+      const myProjects = currentPI
+        ? projList.filter(p => p.owner === currentPI.id)
+        : projList;
+      setProjects(myProjects);
+      setMyRequests(Array.isArray(reqData) ? reqData : reqData.results || []);
+
+      if (currentPI) {
+        const [suData, storData] = await Promise.all([
+          getMySponsoredUsers(currentPI.id),
+          getStorageAllocations(),
+        ]);
+        setSponsoredUsers(Array.isArray(suData) ? suData : suData.results || []);
+        const storList = Array.isArray(storData) ? storData : storData.results || [];
+        // Filter storage for this PI's projects
+        const myProjectIds = new Set(myProjects.map(p => p.id));
+        setStorageAllocations(storList.filter(s => myProjectIds.has(s.project)));
+      }
+    } catch (e) {
+      setError('Failed to load dashboard data.');
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const totalStorageTB = storageAllocations.reduce((sum, s) => sum + parseFloat(s.allocated_tb || 0), 0);
 
   return (
-    <WesternLayout boxWidth={900}>
-      <Box sx={{ p: 4 }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Typography variant="h4">PI Dashboard</Typography>
+    <WesternLayout boxWidth={1100}>
+      <Box sx={{ p: 3 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+          <Box>
+            <Typography variant="h4" fontWeight={700}>PI Dashboard</Typography>
+            {piProfile && (
+              <Typography variant="body2" color="text.secondary">
+                {piProfile.user?.first_name} {piProfile.user?.last_name} — Speedcode: <strong>{piProfile.speedcode}</strong>
+                {piProfile.department && ` — ${piProfile.department.name}`}
+              </Typography>
+            )}
+          </Box>
           <Button variant="outlined" color="secondary" onClick={logout}>Logout</Button>
         </Box>
 
-        {/* Quick Stats */}
-        <Grid container spacing={2} sx={{ my: 2 }}>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 2 }}><Typography>Total Projects: TODO</Typography></Paper>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 2 }}><Typography>Total Storage: TODO</Typography></Paper>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <Paper sx={{ p: 2 }}><Typography>Sponsored Users: TODO</Typography></Paper>
-          </Grid>
+        {error && <Typography color="error" mb={2}>{error}</Typography>}
+
+        {/* Stats */}
+        <Grid container spacing={2} mb={3}>
+          {[
+            { label: 'Projects', value: projects.length },
+            { label: 'Sponsored Users', value: sponsoredUsers.length },
+            { label: 'Storage Allocated', value: `${totalStorageTB.toFixed(2)} TB` },
+            { label: 'Pending Requests', value: myRequests.filter(r => r.status === 'pending').length },
+          ].map(({ label, value }) => (
+            <Grid item xs={6} sm={3} key={label}>
+              <Paper sx={{ p: 2, textAlign: 'center' }}>
+                <Typography variant="h5" fontWeight={700}>{loading ? '—' : value}</Typography>
+                <Typography variant="body2" color="text.secondary">{label}</Typography>
+              </Paper>
+            </Grid>
+          ))}
         </Grid>
 
-        {/* Owned Projects */}
-        <Box sx={{ my: 3 }}>
-          <Typography variant="h6">Owned Projects</Typography>
-          <TableContainer component={Paper} sx={{ mt: 1 }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Project Name</TableCell>
-                  <TableCell>Speedcode</TableCell>
-                  <TableCell>Status</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {/* TODO: Map projects here */}
-                <TableRow>
-                  <TableCell colSpan={3} align="center">No projects found</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+          <Tab label="Projects" />
+          <Tab label="Sponsored Users" />
+          <Tab label="Storage Allocations" />
+          <Tab label="My Requests" />
+        </Tabs>
 
-        {/* Storage Allocations */}
-        <Box sx={{ my: 3 }}>
-          <Typography variant="h6">Storage Allocations</Typography>
-          <TableContainer component={Paper} sx={{ mt: 1 }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Project</TableCell>
-                  <TableCell>Storage (GB)</TableCell>
-                  <TableCell>Users with Access</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {/* TODO: Map storageAllocations here */}
-                <TableRow>
-                  <TableCell colSpan={3} align="center">No storage allocations</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
+        {loading ? (
+          <Box display="flex" justifyContent="center" py={4}><CircularProgress /></Box>
+        ) : (
+          <>
+            {/* Projects */}
+            {tab === 0 && (
+              <TableContainer component={Paper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Project Name</TableCell>
+                      <TableCell>Description</TableCell>
+                      <TableCell>Created</TableCell>
+                      <TableCell>Default</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {projects.length === 0 ? (
+                      <TableRow><TableCell colSpan={4} align="center">No projects found</TableCell></TableRow>
+                    ) : projects.map(p => (
+                      <TableRow key={p.id}>
+                        <TableCell><strong>{p.name}</strong></TableCell>
+                        <TableCell>{p.description || '—'}</TableCell>
+                        <TableCell>{p.created_date}</TableCell>
+                        <TableCell>{p.is_default ? <Chip label="Default" size="small" color="primary" /> : '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
 
-        {/* Sponsored Users */}
-        <Box sx={{ my: 3 }}>
-          <Typography variant="h6">Sponsored Users</Typography>
-          <TableContainer component={Paper} sx={{ mt: 1 }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Status</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {/* TODO: Map sponsoredUsers here */}
-                <TableRow>
-                  <TableCell colSpan={3} align="center">No sponsored users</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
+            {/* Sponsored Users */}
+            {tab === 1 && (
+              <TableContainer component={Paper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Email</TableCell>
+                      <TableCell>Role</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Project</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Start Date</TableCell>
+                      <TableCell>End Date</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {sponsoredUsers.length === 0 ? (
+                      <TableRow><TableCell colSpan={8} align="center">No sponsored users</TableCell></TableRow>
+                    ) : sponsoredUsers.map(su => (
+                      <TableRow key={su.id}>
+                        <TableCell>{su.user?.first_name} {su.user?.last_name}</TableCell>
+                        <TableCell>{su.user?.email}</TableCell>
+                        <TableCell>{su.user_role}</TableCell>
+                        <TableCell>{su.user_type}</TableCell>
+                        <TableCell>{su.project?.name || '—'}</TableCell>
+                        <TableCell><Chip label={su.status} color={STATUS_COLOR[su.status] || 'default'} size="small" /></TableCell>
+                        <TableCell>{su.start_date}</TableCell>
+                        <TableCell>{su.end_date || 'Ongoing'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+
+            {/* Storage Allocations */}
+            {tab === 2 && (
+              <TableContainer component={Paper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Project</TableCell>
+                      <TableCell>Storage Type</TableCell>
+                      <TableCell>Allocated (TB)</TableCell>
+                      <TableCell>Start Date</TableCell>
+                      <TableCell>End Date</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {storageAllocations.length === 0 ? (
+                      <TableRow><TableCell colSpan={5} align="center">No storage allocations</TableCell></TableRow>
+                    ) : storageAllocations.map(s => (
+                      <TableRow key={s.id}>
+                        <TableCell>{projects.find(p => p.id === s.project)?.name || s.project}</TableCell>
+                        <TableCell>{s.storage_type_name || s.storage_type}</TableCell>
+                        <TableCell>{s.allocated_tb}</TableCell>
+                        <TableCell>{s.start_date}</TableCell>
+                        <TableCell>{s.end_date || 'Ongoing'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+
+            {/* My Requests */}
+            {tab === 3 && (
+              <TableContainer component={Paper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Submitted</TableCell>
+                      <TableCell>Notes</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {myRequests.length === 0 ? (
+                      <TableRow><TableCell colSpan={4} align="center">No requests</TableCell></TableRow>
+                    ) : myRequests.map(r => (
+                      <TableRow key={r.id}>
+                        <TableCell>{r.request_type}</TableCell>
+                        <TableCell><Chip label={r.status} color={STATUS_COLOR[r.status] || 'default'} size="small" /></TableCell>
+                        <TableCell>{new Date(r.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell>{r.admin_notes || '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </>
+        )}
       </Box>
     </WesternLayout>
   );
 };
 
-export default PIDashboard; 
+export default PIDashboard;

@@ -30,7 +30,7 @@ const initialProject = {
 };
 
 export default function NewPIRequestPage() {
-  const { user } = useAuth();
+  useAuth();
   const [form, setForm] = useState(initialPIState);
   const [projects, setProjects] = useState([{ ...initialProject }]);
   const [allProjects, setAllProjects] = useState([]);
