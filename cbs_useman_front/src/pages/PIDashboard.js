@@ -3,9 +3,17 @@ import { useAuth } from '../context/AuthContext';
 import {
   Box, Typography, Button, Paper, Grid, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Chip, CircularProgress, Tabs, Tab,
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField,
+  MenuItem, Select, InputLabel, FormControl,
 } from '@mui/material';
 import WesternLayout from '../components/WesternLayout';
-import { getAllProjects, getMySponsoredUsers, getStorageAllocations, getMyRequests } from '../api/requests';
+import { getAllProjects, getMySponsoredUsers, getStorageAllocations, getMyRequests, submitSponsoredUserRequest } from '../api/requests';
+
+const EMPTY_SU_FORM = {
+  first_name: '', last_name: '', uwo_email: '',
+  user_type: 'basic', user_role: 'student',
+  start_date: '', end_date: '',
+};
 
 const STATUS_COLOR = { active: 'success', pending: 'warning', inactive: 'default' };
 
@@ -19,6 +27,10 @@ const PIDashboard = () => {
   const [myRequests, setMyRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [addSUDialog, setAddSUDialog] = useState(false);
+  const [suForm, setSUForm] = useState(EMPTY_SU_FORM);
+  const [suSaving, setSUSaving] = useState(false);
+  const [suSuccess, setSUSuccess] = useState('');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -68,6 +80,26 @@ const PIDashboard = () => {
 
   const totalStorageTB = storageAllocations.reduce((sum, s) => sum + parseFloat(s.allocated_tb || 0), 0);
 
+  const handleAddSU = async () => {
+    setSUSaving(true);
+    setError('');
+    try {
+      await submitSponsoredUserRequest({
+        ...suForm,
+        pi_id: piProfile?.id,
+        pi_name: piProfile ? `${piProfile.user?.first_name} ${piProfile.user?.last_name}` : '',
+      });
+      setSUSuccess('Request submitted — pending admin approval.');
+      setSUForm(EMPTY_SU_FORM);
+      setAddSUDialog(false);
+      fetchData();
+    } catch (e) {
+      setError('Failed to submit sponsored user request.');
+    } finally {
+      setSUSaving(false);
+    }
+  };
+
   return (
     <WesternLayout boxWidth={1100}>
       <Box sx={{ p: 3 }}>
@@ -85,6 +117,7 @@ const PIDashboard = () => {
         </Box>
 
         {error && <Typography color="error" mb={2}>{error}</Typography>}
+        {suSuccess && <Typography color="success.main" mb={2}>{suSuccess}</Typography>}
 
         {/* Stats */}
         <Grid container spacing={2} mb={3}>
@@ -144,6 +177,12 @@ const PIDashboard = () => {
 
             {/* Sponsored Users */}
             {tab === 1 && (
+              <>
+                <Box display="flex" justifyContent="flex-end" mb={1}>
+                  <Button variant="contained" size="small" onClick={() => { setSUForm(EMPTY_SU_FORM); setSUSuccess(''); setAddSUDialog(true); }}>
+                    + Add Sponsored User
+                  </Button>
+                </Box>
               <TableContainer component={Paper}>
                 <Table size="small">
                   <TableHead>
@@ -176,6 +215,7 @@ const PIDashboard = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+              </>
             )}
 
             {/* Storage Allocations */}
@@ -238,6 +278,50 @@ const PIDashboard = () => {
           </>
         )}
       </Box>
+
+      <Dialog open={addSUDialog} onClose={() => setAddSUDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Sponsored User</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            This will submit a request for admin approval.
+          </Typography>
+          <Box display="flex" gap={2}>
+            <TextField label="First Name" fullWidth value={suForm.first_name} onChange={e => setSUForm(f => ({ ...f, first_name: e.target.value }))} />
+            <TextField label="Last Name" fullWidth value={suForm.last_name} onChange={e => setSUForm(f => ({ ...f, last_name: e.target.value }))} />
+          </Box>
+          <TextField label="UWO Email" fullWidth value={suForm.uwo_email} onChange={e => setSUForm(f => ({ ...f, uwo_email: e.target.value }))} />
+          <FormControl fullWidth>
+            <InputLabel>Account Type</InputLabel>
+            <Select value={suForm.user_type} label="Account Type" onChange={e => setSUForm(f => ({ ...f, user_type: e.target.value }))}>
+              <MenuItem value="basic">Basic</MenuItem>
+              <MenuItem value="poweruser">Power User</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl fullWidth>
+            <InputLabel>Role</InputLabel>
+            <Select value={suForm.user_role} label="Role" onChange={e => setSUForm(f => ({ ...f, user_role: e.target.value }))}>
+              <MenuItem value="student">Student</MenuItem>
+              <MenuItem value="staff">Staff</MenuItem>
+              <MenuItem value="faculty">Faculty</MenuItem>
+              <MenuItem value="external">External Collaborator</MenuItem>
+            </Select>
+          </FormControl>
+          <Box display="flex" gap={2}>
+            <TextField label="Start Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={suForm.start_date} onChange={e => setSUForm(f => ({ ...f, start_date: e.target.value }))} />
+            <TextField label="End Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={suForm.end_date} onChange={e => setSUForm(f => ({ ...f, end_date: e.target.value }))} />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddSUDialog(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleAddSU}
+            disabled={suSaving || !suForm.first_name || !suForm.last_name || !suForm.uwo_email || !suForm.start_date}
+          >
+            {suSaving ? 'Submitting…' : 'Submit Request'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </WesternLayout>
   );
 };
