@@ -4,9 +4,17 @@ from .views import (
     DepartmentViewSet,
     ProjectViewSet,
     ProjectSpeedcodeViewSet,
-    PrincipalInvestigatorViewSet, 
-    SponsoredUserViewSet, UserChangeRecordViewSet,
-    TestLoginView, TestCreateUserView, TestLogoutView, CurrentUserView  # New views for testing
+    PrincipalInvestigatorViewSet,
+    SponsoredUserViewSet,
+    UserChangeRecordViewSet,
+    TestLoginView,
+    TestCreateUserView,
+    TestLogoutView,
+    CurrentUserView,
+    RequestListCreateView,
+    user_status,
+    user_email,
+    list_projects,
 )
 
 router = DefaultRouter()
@@ -19,10 +27,12 @@ router.register(r'change-records', UserChangeRecordViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
-    # Testing endpoints - remove in production
     path('test-login/', TestLoginView.as_view(), name='test-login'),
-    path('test-create-user/', TestCreateUserView.as_view(), name='test-create-user'),
-    # Aliases for frontend compatibility
     path('test-logout/', TestLogoutView.as_view(), name='test-logout'),
+    path('test-create-user/', TestCreateUserView.as_view(), name='test-create-user'),
     path('current-user/', CurrentUserView.as_view(), name='current-user'),
+    path('requests/', RequestListCreateView.as_view(), name='request-list-create'),
+    path('user-status/', user_status, name='user-status'),
+    path('me/email/', user_email, name='user-email'),
+    path('all-projects/', list_projects, name='list-projects'),
 ]

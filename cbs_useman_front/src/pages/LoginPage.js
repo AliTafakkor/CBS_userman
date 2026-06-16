@@ -1,100 +1,82 @@
 import React, { useState } from 'react';
+import { Typography, TextField, Button } from '@mui/material';
+import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Paper,
-  TextField,
-  Button,
-  Typography,
-  Container,
-  Alert,
-} from '@mui/material';
-import { useAuth } from '../contexts/AuthContext';
+import { getUserStatus } from '../api/requests';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import WesternLayout from '../components/WesternLayout';
 
 const LoginPage = () => {
-  const [credentials, setCredentials] = useState({ username: '', password: '' });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, setUserStatus } = useAuth();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const navigate = useNavigate();
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
-
+    const result = await login(username, password);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
     try {
-      await login(credentials);
-      navigate('/');
+      const statusResp = await getUserStatus();
+      setUserStatus(statusResp.status, statusResp.role);
+      if (statusResp.status === 'active') {
+        navigate('/');
+      } else {
+        navigate('/not-registered');
+      }
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
-    } finally {
-      setLoading(false);
+      setError('Login succeeded, but failed to check user status.');
     }
   };
 
   return (
-    <Container maxWidth="sm">
-      <Box
-        sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Paper sx={{ p: 4, width: '100%' }}>
-          <Typography component="h1" variant="h4" align="center" gutterBottom>
-            CBS User Management
-          </Typography>
-          <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
-            Sign in to your account
-          </Typography>
-
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-
-          <Box component="form" onSubmit={handleSubmit}>
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              id="username"
-              label="Username"
-              name="username"
-              autoComplete="username"
-              autoFocus
-              value={credentials.username}
-              onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
-            />
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              name="password"
-              label="Password"
-              type="password"
-              id="password"
-              autoComplete="current-password"
-              value={credentials.password}
-              onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
-            />
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              sx={{ mt: 3, mb: 2 }}
-              disabled={loading}
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </Button>
-          </Box>
-        </Paper>
-      </Box>
-    </Container>
+    <WesternLayout boxWidth={350} animationDuration="16s">
+      <LockOutlinedIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
+      <Typography variant="h5" fontWeight={600} gutterBottom>
+        Sign In
+      </Typography>
+      {error && (
+        <Typography color="error" sx={{ mb: 2, textAlign: 'center' }}>
+          {error}
+        </Typography>
+      )}
+      <form onSubmit={handleSubmit} style={{ width: '100%' }}>
+        <TextField
+          label="Username"
+          variant="outlined"
+          value={username}
+          onChange={e => setUsername(e.target.value)}
+          fullWidth
+          margin="normal"
+          autoFocus
+          InputProps={{ autoComplete: 'username' }}
+        />
+        <TextField
+          label="Password"
+          variant="outlined"
+          type="password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          fullWidth
+          margin="normal"
+          InputProps={{ autoComplete: 'current-password' }}
+        />
+        <Button
+          type="submit"
+          variant="contained"
+          color="primary"
+          fullWidth
+          sx={{ mt: 2, borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+        >
+          Login
+        </Button>
+      </form>
+    </WesternLayout>
   );
 };
 

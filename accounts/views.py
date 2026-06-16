@@ -2,20 +2,21 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth.models import User
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import AllowAny
-from rest_framework import viewsets, permissions, filters
-from rest_framework.decorators import action
-from rest_framework.response import Response
+from rest_framework import status, generics, viewsets, permissions, filters
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.authtoken.models import Token
-from .models import Department, PrincipalInvestigator, SponsoredUser, UserChangeRecord, Project, ProjectSpeedcode
+from .models import (
+    Department, PrincipalInvestigator, SponsoredUser,
+    UserChangeRecord, Project, ProjectSpeedcode, Request,
+)
 from .serializers import (
     UserSerializer, DepartmentSerializer, PrincipalInvestigatorSerializer,
-    SponsoredUserSerializer, UserChangeRecordSerializer, ProjectSerializer, ProjectSpeedcodeSerializer
+    SponsoredUserSerializer, UserChangeRecordSerializer,
+    ProjectSerializer, ProjectSpeedcodeSerializer, RequestSerializer,
 )
-import json
-from django.utils import timezone
 from django.db import transaction
+
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
@@ -25,6 +26,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'code']
     ordering_fields = ['name', 'code']
 
+
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
@@ -32,7 +34,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'owner__user__first_name', 'owner__user__last_name']
     ordering_fields = ['name', 'created_date']
-    
+
     @action(detail=True, methods=['get'])
     def speedcodes(self, request, pk=None):
         project = self.get_object()
@@ -40,26 +42,15 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer = ProjectSpeedcodeSerializer(speedcodes, many=True)
         return Response(serializer.data)
 
+
 class ProjectSpeedcodeViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for managing speedcode authorizations on projects.
-    
-    Each speedcode is owned by a specific PI. Only the owning PI can
-    authorize their speedcode to be used in a project for cost allocation.
-    """
     queryset = ProjectSpeedcode.objects.all()
     serializer_class = ProjectSpeedcodeSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['speedcode', 'pi__user__first_name', 'pi__user__last_name', 'project__name']
     ordering_fields = ['authorized_date', 'allocation_percentage']
-    
-    def perform_create(self, serializer):
-        """
-        Create a speedcode authorization.
-        Validation ensures the speedcode belongs to the authorizing PI.
-        """
-        serializer.save()
+
 
 class PrincipalInvestigatorViewSet(viewsets.ModelViewSet):
     queryset = PrincipalInvestigator.objects.all()
@@ -68,38 +59,32 @@ class PrincipalInvestigatorViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['user__first_name', 'user__last_name', 'employee_id']
     ordering_fields = ['user__last_name', 'department__name']
-    
+
     @transaction.atomic
     def perform_create(self, serializer):
-        # Create the PI
         pi = serializer.save()
-        
-        # Create default project for the PI
         default_project = Project.objects.create(
             name=f"{pi.user.get_full_name()}'s Default Project",
             description=f"Default project for {pi.user.get_full_name()}",
             owner=pi,
-            is_default=True
+            is_default=True,
         )
-        
-        # Create initial speedcode allocation (100% to PI's speedcode)
         ProjectSpeedcode.objects.create(
             project=default_project,
             pi=pi,
             speedcode=pi.speedcode,
-            allocation_percentage=100.00
+            allocation_percentage=100.00,
         )
-        
-        # Set as default project
         pi.default_project = default_project
         pi.save()
-    
+
     @action(detail=True, methods=['get'])
     def sponsored_users(self, request, pk=None):
         pi = self.get_object()
         users = SponsoredUser.objects.filter(sponsor=pi)
         serializer = SponsoredUserSerializer(users, many=True)
         return Response(serializer.data)
+
 
 class SponsoredUserViewSet(viewsets.ModelViewSet):
     queryset = SponsoredUser.objects.all()
@@ -108,36 +93,31 @@ class SponsoredUserViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['user__first_name', 'user__last_name', 'user_type', 'status']
     ordering_fields = ['user__last_name', 'sponsor__user__last_name', 'start_date']
-    
+
     def perform_create(self, serializer):
-        # Save initial state and create change record
         instance = serializer.save()
         UserChangeRecord.objects.create(
             user=instance.user,
             change_type='create',
             changed_by=self.request.user,
             previous_data=None,
-            new_data=json.loads(SponsoredUserSerializer(instance).data),
-            notes=f"Account created by {self.request.user.get_full_name()}"
+            new_data=SponsoredUserSerializer(instance).data,
+            notes=f"Account created by {self.request.user.get_full_name()}",
         )
-    
+
     def perform_update(self, serializer):
-        # Get the existing object for comparison
         instance = self.get_object()
-        previous_data = json.loads(SponsoredUserSerializer(instance).data)
-        
-        # Save the updates
+        previous_data = dict(SponsoredUserSerializer(instance).data)
         updated_instance = serializer.save()
-        
-        # Create change record
         UserChangeRecord.objects.create(
             user=updated_instance.user,
             change_type='update',
             changed_by=self.request.user,
             previous_data=previous_data,
-            new_data=json.loads(SponsoredUserSerializer(updated_instance).data),
-            notes=f"Account updated by {self.request.user.get_full_name()}"
+            new_data=SponsoredUserSerializer(updated_instance).data,
+            notes=f"Account updated by {self.request.user.get_full_name()}",
         )
+
 
 class UserChangeRecordViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = UserChangeRecord.objects.all()
@@ -146,7 +126,7 @@ class UserChangeRecordViewSet(viewsets.ReadOnlyModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['user__username', 'change_type', 'notes']
     ordering_fields = ['timestamp', 'change_type']
-    
+
     def get_queryset(self):
         queryset = UserChangeRecord.objects.all()
         user_id = self.request.query_params.get('user_id', None)
@@ -154,23 +134,17 @@ class UserChangeRecordViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(user_id=user_id)
         return queryset
 
+
 class TestLoginView(APIView):
-    """
-    Temporary login endpoint for testing - will be replaced by SSO in production
-    Returns token and user info for frontend consumption
-    """
+    """Temporary login endpoint — returns a DRF token. Replace with SSO in production."""
     permission_classes = [AllowAny]
-    
+
     def post(self, request):
         username = request.data.get('username')
         password = request.data.get('password')
-        
         user = authenticate(username=username, password=password)
-        
         if user is not None:
-            # Generate or get existing token
             token, _ = Token.objects.get_or_create(user=user)
-            
             return Response({
                 "token": token.key,
                 "user": {
@@ -181,97 +155,111 @@ class TestLoginView(APIView):
                     "last_name": user.last_name,
                     "is_staff": user.is_staff,
                     "is_superuser": user.is_superuser,
-                }
+                },
             })
-        else:
-            return Response(
-                {"error": "Invalid credentials"}, 
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-
-class TestCreateUserView(APIView):
-    """
-    Temporary endpoint to create users for testing
-    """
-    permission_classes = [AllowAny]
-    
-    def post(self, request):
-        username = request.data.get('username')
-        password = request.data.get('password')
-        email = request.data.get('email')
-        first_name = request.data.get('first_name')
-        last_name = request.data.get('last_name')
-        
-        if not (username and password):
-            return Response(
-                {"error": "Username and password are required"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        if User.objects.filter(username=username).exists():
-            return Response(
-                {"error": "Username already exists"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        user = User.objects.create_user(
-            username=username,
-            password=password,
-            email=email,
-            first_name=first_name,
-            last_name=last_name
-        )
-        
-        return Response({
-            "message": "User created successfully",
-            "user_id": user.id,
-            "username": user.username
-        }, status=status.HTTP_201_CREATED)
+        return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 class TestLogoutView(APIView):
-    """
-    Logout endpoint for testing
-    """
+    """Invalidates the user's auth token."""
     permission_classes = [AllowAny]
-    
+
     def post(self, request):
-        # Invalidate the token
         auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if auth_header.startswith('Bearer '):
-            token_key = auth_header[7:]
-            try:
-                token = Token.objects.get(key=token_key)
-                token.delete()
-            except Token.DoesNotExist:
-                pass
-        
+        if auth_header.startswith('Bearer ') or auth_header.startswith('Token '):
+            token_key = auth_header.split(' ', 1)[1]
+            Token.objects.filter(key=token_key).delete()
         return Response({"message": "Logout successful"})
 
 
-class CurrentUserView(APIView):
-    """
-    Get current user info based on token
-    """
+class TestCreateUserView(APIView):
+    """Temporary endpoint to create users for testing."""
     permission_classes = [AllowAny]
-    
+
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+        if not (username and password):
+            return Response({"error": "Username and password are required"}, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(username=username).exists():
+            return Response({"error": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.create_user(
+            username=username,
+            password=password,
+            email=request.data.get('email', ''),
+            first_name=request.data.get('first_name', ''),
+            last_name=request.data.get('last_name', ''),
+        )
+        return Response({"message": "User created successfully", "user_id": user.id, "username": user.username},
+                        status=status.HTTP_201_CREATED)
+
+
+class CurrentUserView(APIView):
+    """Returns the authenticated user's info based on a Bearer/Token header."""
+    permission_classes = [AllowAny]
+
     def get(self, request):
         auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if auth_header.startswith('Bearer '):
-            token_key = auth_header[7:]
+        if auth_header.startswith('Bearer ') or auth_header.startswith('Token '):
+            token_key = auth_header.split(' ', 1)[1]
             try:
                 token = Token.objects.get(key=token_key)
-                user = token.user
+                u = token.user
                 return Response({
-                    "id": user.id,
-                    "username": user.username,
-                    "email": user.email,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                    "is_staff": user.is_staff,
-                    "is_superuser": user.is_superuser,
+                    "id": u.id,
+                    "username": u.username,
+                    "email": u.email,
+                    "first_name": u.first_name,
+                    "last_name": u.last_name,
+                    "is_staff": u.is_staff,
+                    "is_superuser": u.is_superuser,
                 })
-            except:
+            except Token.DoesNotExist:
                 pass
-        
         return Response({"error": "Not authenticated"}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+class RequestListCreateView(generics.ListCreateAPIView):
+    serializer_class = RequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return Request.objects.all()
+        return Request.objects.filter(user=user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_status(request):
+    user = request.user
+    if user.is_staff:
+        return Response({'status': 'active', 'role': 'admin'})
+    try:
+        pi = PrincipalInvestigator.objects.get(user=user)
+        return Response({'status': 'active', 'role': 'pi', 'pi_id': pi.id})
+    except PrincipalInvestigator.DoesNotExist:
+        pass
+    try:
+        sponsored = SponsoredUser.objects.get(user=user)
+        role = 'user' if sponsored.status == 'active' else None
+        return Response({'status': sponsored.status, 'role': role})
+    except SponsoredUser.DoesNotExist:
+        return Response({'status': 'not_found', 'role': None})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_email(request):
+    return Response({'email': request.user.email})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_projects(request):
+    projects = Project.objects.all().values('id', 'name')
+    return Response(list(projects))
