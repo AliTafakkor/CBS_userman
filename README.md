@@ -2,7 +2,7 @@
 User management system for CBS server
 
 ## Overview
-CBS_useman is a comprehensive user and billing management system for CBS (Computational Biology Server) that manages Principal Investigators (PIs), sponsored users, projects, storage allocations, and automated billing.
+CBS_useman is a comprehensive user and billing management system for CBS (Computational Brain Sciences) that manages principal investigators (PIs), sponsored users, projects, storage allocations, and automated billing.
 
 ## Key Features
 
