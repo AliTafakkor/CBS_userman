@@ -51,5 +51,5 @@ ENV/
 # Node modules (for frontend)
 node_modules/
 
-# Session continuity files
-CONTINUATION.md
+# Developer-only docs (not for version control)
+docs/dev/
