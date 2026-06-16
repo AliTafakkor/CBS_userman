@@ -144,10 +144,26 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '10/min',
+        'user': '300/min',
+        'login': '5/min',
+    },
 }
 
-# CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # Change in production
+# CORS settings — open in dev, restricted in production
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip()
+        for origin in __import__('os').environ.get('CORS_ALLOWED_ORIGINS', '').split(',')
+        if origin.strip()
+    ]
 
 # For testing - add a local authentication backend alongside the SSO
 AUTHENTICATION_BACKENDS = [

@@ -15,15 +15,16 @@ from .views import (
     user_status,
     user_email,
     list_projects,
+    list_pis_for_form,
 )
 
 router = DefaultRouter()
-router.register(r'departments', DepartmentViewSet)
-router.register(r'projects', ProjectViewSet)
-router.register(r'project-speedcodes', ProjectSpeedcodeViewSet)
-router.register(r'principal-investigators', PrincipalInvestigatorViewSet)
-router.register(r'sponsored-users', SponsoredUserViewSet)
-router.register(r'change-records', UserChangeRecordViewSet)
+router.register(r'departments', DepartmentViewSet, basename='department')
+router.register(r'projects', ProjectViewSet, basename='project')
+router.register(r'project-speedcodes', ProjectSpeedcodeViewSet, basename='projectspeedcode')
+router.register(r'principal-investigators', PrincipalInvestigatorViewSet, basename='principalinvestigator')
+router.register(r'sponsored-users', SponsoredUserViewSet, basename='sponsoreduser')
+router.register(r'change-records', UserChangeRecordViewSet, basename='userchangerecord')
 router.register(r'requests', RequestViewSet, basename='request')
 
 urlpatterns = [
@@ -35,4 +36,5 @@ urlpatterns = [
     path('user-status/', user_status, name='user-status'),
     path('me/email/', user_email, name='user-email'),
     path('all-projects/', list_projects, name='list-projects'),
+    path('all-pis/', list_pis_for_form, name='list-pis-for-form'),
 ]

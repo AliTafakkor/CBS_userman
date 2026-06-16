@@ -6,6 +6,12 @@ from rest_framework import status, generics, viewsets, permissions, filters
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.authtoken.models import Token
+from rest_framework.throttling import AnonRateThrottle
+
+
+class LoginRateThrottle(AnonRateThrottle):
+    rate = '5/min'
+    scope = 'login'
 from .models import (
     Department, PrincipalInvestigator, SponsoredUser,
     UserChangeRecord, Project, ProjectSpeedcode, Request,
@@ -16,6 +22,7 @@ from .serializers import (
     ProjectSerializer, ProjectSpeedcodeSerializer, RequestSerializer,
 )
 from django.db import transaction
+from .provisioning import provision_pi, provision_sponsored_user
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
@@ -27,38 +34,78 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     ordering_fields = ['name', 'code']
 
 
+def _get_pi_for_user(user):
+    """Return PrincipalInvestigator for user, or None."""
+    try:
+        return PrincipalInvestigator.objects.get(user=user)
+    except PrincipalInvestigator.DoesNotExist:
+        return None
+
+
+def _get_sponsored_user_for_user(user):
+    """Return SponsoredUser for user, or None."""
+    try:
+        return SponsoredUser.objects.get(user=user)
+    except SponsoredUser.DoesNotExist:
+        return None
+
+
 class ProjectViewSet(viewsets.ModelViewSet):
-    queryset = Project.objects.all()
     serializer_class = ProjectSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'owner__user__first_name', 'owner__user__last_name']
     ordering_fields = ['name', 'created_date']
 
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return Project.objects.all()
+        pi = _get_pi_for_user(user)
+        if pi:
+            return Project.objects.filter(owner=pi) | Project.objects.filter(collaborating_pis=pi)
+        su = _get_sponsored_user_for_user(user)
+        if su and su.project:
+            return Project.objects.filter(pk=su.project.pk)
+        return Project.objects.none()
+
     @action(detail=True, methods=['get'])
     def speedcodes(self, request, pk=None):
         project = self.get_object()
         speedcodes = ProjectSpeedcode.objects.filter(project=project)
-        serializer = ProjectSpeedcodeSerializer(speedcodes, many=True)
-        return Response(serializer.data)
+        return Response(ProjectSpeedcodeSerializer(speedcodes, many=True).data)
 
 
 class ProjectSpeedcodeViewSet(viewsets.ModelViewSet):
-    queryset = ProjectSpeedcode.objects.all()
     serializer_class = ProjectSpeedcodeSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['speedcode', 'pi__user__first_name', 'pi__user__last_name', 'project__name']
     ordering_fields = ['authorized_date', 'allocation_percentage']
 
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return ProjectSpeedcode.objects.all()
+        pi = _get_pi_for_user(user)
+        if pi:
+            return ProjectSpeedcode.objects.filter(pi=pi)
+        return ProjectSpeedcode.objects.none()
+
 
 class PrincipalInvestigatorViewSet(viewsets.ModelViewSet):
-    queryset = PrincipalInvestigator.objects.all()
     serializer_class = PrincipalInvestigatorSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['user__first_name', 'user__last_name', 'employee_id']
     ordering_fields = ['user__last_name', 'department__name']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return PrincipalInvestigator.objects.all()
+        # PIs can see themselves; others cannot browse the PI list
+        return PrincipalInvestigator.objects.filter(user=user)
 
     @transaction.atomic
     def perform_create(self, serializer):
@@ -82,17 +129,27 @@ class PrincipalInvestigatorViewSet(viewsets.ModelViewSet):
     def sponsored_users(self, request, pk=None):
         pi = self.get_object()
         users = SponsoredUser.objects.filter(sponsor=pi)
-        serializer = SponsoredUserSerializer(users, many=True)
-        return Response(serializer.data)
+        return Response(SponsoredUserSerializer(users, many=True).data)
 
 
 class SponsoredUserViewSet(viewsets.ModelViewSet):
-    queryset = SponsoredUser.objects.all()
     serializer_class = SponsoredUserSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['user__first_name', 'user__last_name', 'user_type', 'status']
     ordering_fields = ['user__last_name', 'sponsor__user__last_name', 'start_date']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return SponsoredUser.objects.all()
+        pi = _get_pi_for_user(user)
+        if pi:
+            return SponsoredUser.objects.filter(sponsor=pi)
+        su = _get_sponsored_user_for_user(user)
+        if su:
+            return SponsoredUser.objects.filter(pk=su.pk)
+        return SponsoredUser.objects.none()
 
     def perform_create(self, serializer):
         instance = serializer.save()
@@ -120,7 +177,6 @@ class SponsoredUserViewSet(viewsets.ModelViewSet):
 
 
 class UserChangeRecordViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = UserChangeRecord.objects.all()
     serializer_class = UserChangeRecordSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -128,16 +184,26 @@ class UserChangeRecordViewSet(viewsets.ReadOnlyModelViewSet):
     ordering_fields = ['timestamp', 'change_type']
 
     def get_queryset(self):
-        queryset = UserChangeRecord.objects.all()
-        user_id = self.request.query_params.get('user_id', None)
-        if user_id is not None:
-            queryset = queryset.filter(user_id=user_id)
-        return queryset
+        user = self.request.user
+        if user.is_staff:
+            qs = UserChangeRecord.objects.all()
+        else:
+            pi = _get_pi_for_user(user)
+            if pi:
+                sponsored_user_ids = SponsoredUser.objects.filter(sponsor=pi).values_list('user_id', flat=True)
+                qs = UserChangeRecord.objects.filter(user_id__in=sponsored_user_ids)
+            else:
+                qs = UserChangeRecord.objects.filter(user=user)
+        user_id = self.request.query_params.get('user_id')
+        if user_id:
+            qs = qs.filter(user_id=user_id)
+        return qs
 
 
 class TestLoginView(APIView):
     """Temporary login endpoint — returns a DRF token. Replace with SSO in production."""
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         username = request.data.get('username')
@@ -237,10 +303,31 @@ class RequestViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
+    @transaction.atomic
     def approve(self, request, pk=None):
         req = self.get_object()
+        if req.status != 'pending':
+            return Response({'error': 'Request is not pending'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if req.request_type == 'new_pi':
+                pi, temp_password = provision_pi(req.data)
+                note = f"PI account created: username={pi.user.username}"
+                if temp_password:
+                    note += f", temp_password={temp_password}"
+            elif req.request_type == 'new_user':
+                su, temp_password = provision_sponsored_user(req.data)
+                note = f"Sponsored user created: username={su.user.username}"
+                if temp_password:
+                    note += f", temp_password={temp_password}"
+            else:
+                note = ""
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        admin_notes = request.data.get('admin_notes', '')
         req.status = 'approved'
-        req.admin_notes = request.data.get('admin_notes', '')
+        req.admin_notes = f"{admin_notes}\n[System] {note}".strip() if note else admin_notes
         req.approved_by = request.user
         req.save()
         return Response(RequestSerializer(req).data)
@@ -285,3 +372,15 @@ def user_email(request):
 def list_projects(request):
     projects = Project.objects.all().values('id', 'name')
     return Response(list(projects))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_pis_for_form(request):
+    """Lightweight PI list for populating form dropdowns — authenticated users only."""
+    pis = PrincipalInvestigator.objects.select_related('user').all()
+    data = [
+        {'id': pi.id, 'name': pi.user.get_full_name() or pi.user.username, 'speedcode': pi.speedcode}
+        for pi in pis
+    ]
+    return Response(data)
