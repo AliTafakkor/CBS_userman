@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 const AuthContext = createContext();
@@ -8,6 +8,10 @@ export const AuthProvider = ({ children }) => {
     const stored = localStorage.getItem('user');
     return stored ? JSON.parse(stored) : null;
   });
+
+  // Keep a ref so the interceptor always calls the latest logout without
+  // needing to re-register on every render.
+  const logoutRef = useRef();
 
   const login = async (username, password) => {
     try {
@@ -43,6 +47,26 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
   };
+
+  // Sync ref on every render so the interceptor always has the latest function.
+  logoutRef.current = logout;
+
+  // Register a single axios response interceptor: auto-logout on 401.
+  // Skips the auth endpoints themselves to avoid logout loops.
+  useEffect(() => {
+    const AUTH_PATHS = ['/api/accounts/test-login/', '/api/accounts/test-logout/'];
+    const id = axios.interceptors.response.use(
+      res => res,
+      err => {
+        const url = err.config?.url ?? '';
+        if (err.response?.status === 401 && !AUTH_PATHS.some(p => url.includes(p))) {
+          logoutRef.current?.();
+        }
+        return Promise.reject(err);
+      }
+    );
+    return () => axios.interceptors.response.eject(id);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, login, logout, setUserStatus }}>

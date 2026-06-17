@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TextField, Button, Typography, Box, IconButton, Grid, Paper, RadioGroup, FormControlLabel, Radio, FormLabel, FormControl, Autocomplete } from '@mui/material';
+import { TextField, Button, Typography, Box, IconButton, Grid, Paper, RadioGroup, FormControlLabel, Radio, FormLabel, FormControl, Autocomplete, CircularProgress } from '@mui/material';
 import { AddCircle, RemoveCircle } from '@mui/icons-material';
 import { submitRequest, getUserEmail, getAllProjects } from '../api/requests';
 import { useAuth } from '../context/AuthContext';
@@ -198,7 +198,10 @@ export default function NewPIRequestPage() {
           sx={{ mt: 2, mb: 2 }}
         />
         <Box mt={2}>
-          <Button type="submit" variant="contained" color="primary" disabled={submitting}>Submit</Button>
+          <Button type="submit" variant="contained" color="primary" disabled={submitting}
+            startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : null}>
+            {submitting ? 'Submitting…' : 'Submit'}
+          </Button>
         </Box>
       </form>
     </WesternLayout>
